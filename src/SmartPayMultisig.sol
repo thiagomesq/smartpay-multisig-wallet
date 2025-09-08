@@ -58,10 +58,10 @@ contract SmartPayMultisig {
         uint8 numConfirmations;
     }
 
-    /// @dev The minimum weight of confirmations required to execute a transaction.
-    uint8 private constant NUM_CONFIRMATIONS_REQUIRED = 51;
     /// @dev The address of the owner who deployed the contract.
     address private immutable i_contractOwner;
+    /// @dev The minimum weight of confirmations required to execute a transaction.
+    uint8 private s_numConfirmationsRequired = 66;
     /// @dev An array containing the addresses of all owners.
     address[] private s_owners;
     /// @dev A mapping from an owner's address to their voting weight.
@@ -117,11 +117,16 @@ contract SmartPayMultisig {
      * @param weight The voting weight of the new owner.
      */
     event AddOwner(address caller,address indexed owner, uint8 weight);
+    /**
+     * @notice Emitted when the minimum weight of confirmations required to execute a transaction is set.
+     * @param numConfirmationsRequired The new minimum weight of confirmations required.
+     */
+    event SetNumConfirmationsRequired(uint8 indexed numConfirmationsRequired);
 
     /**
      * @dev Modifier to check if the caller is an owner.
      */
-    modifier onlyOwner() {
+    modifier onlyOwners() {
         if (!s_isOwner[msg.sender]) {
             revert SmartPayMultisig__NotOwner();
         }
@@ -161,6 +166,13 @@ contract SmartPayMultisig {
         _;
     }
 
+    modifier onlyContractOwner() {
+        if (i_contractOwner != msg.sender) {
+            revert SmartPayMultisig__NotContractOwner();
+        }
+        _;
+    }
+
     /// @notice Initializes the contract with the contract owner.
     constructor() {
         i_contractOwner = msg.sender;
@@ -178,14 +190,20 @@ contract SmartPayMultisig {
      * @param _owner The address of the new owner.
      * @param _weight The voting weight of the new owner.
      */
-    function addOwnerAndSetWeight(address _owner, uint8 _weight) external {
-        if (i_contractOwner != msg.sender) {
-            revert SmartPayMultisig__NotContractOwner();
-        }
+    function addOwnerAndSetWeight(address _owner, uint8 _weight) external onlyContractOwner {
         s_owners.push(_owner);
         s_ownerWeights[_owner] = _weight;
         s_isOwner[_owner] = true;
         emit AddOwner(msg.sender, _owner, _weight);
+    }
+
+    /**
+     * @notice Sets the minimum weight of confirmations required to execute a transaction.
+     * @param _numConfirmationsRequired The new minimum weight of confirmations required.
+     */
+    function setNumConfirmationsRequired(uint8 _numConfirmationsRequired) external onlyContractOwner {
+        s_numConfirmationsRequired = _numConfirmationsRequired;
+        emit SetNumConfirmationsRequired(_numConfirmationsRequired);
     }
 
     /**
@@ -194,7 +212,7 @@ contract SmartPayMultisig {
      * @param _value The amount of ETH to be sent.
      * @param _data The calldata for the transaction.
      */
-    function submitTransaction(address _to, uint256 _value, bytes memory _data) external onlyOwner {
+    function submitTransaction(address _to, uint256 _value, bytes memory _data) external onlyOwners {
         uint256 txIndex = s_transactions.length;
 
         s_transactions.push(Transaction({to: _to, value: _value, data: _data, executed: false, numConfirmations: 0}));
@@ -208,7 +226,7 @@ contract SmartPayMultisig {
      */
     function confirmTransaction(uint256 _txIndex)
         external
-        onlyOwner
+        onlyOwners
         txExists(_txIndex)
         notExecuted(_txIndex)
         notConfirmed(_txIndex)
@@ -224,10 +242,14 @@ contract SmartPayMultisig {
      * @notice Execute a confirmed transaction.
      * @param _txIndex The index of the transaction to execute.
      */
-    function executeTransaction(uint256 _txIndex) external onlyOwner txExists(_txIndex) notExecuted(_txIndex) {
+    function executeTransaction(uint256 _txIndex) external onlyOwners txExists(_txIndex) notExecuted(_txIndex) {
         Transaction storage transaction = s_transactions[_txIndex];
 
-        if (transaction.numConfirmations < NUM_CONFIRMATIONS_REQUIRED) {
+        if (transaction.numConfirmations < s_numConfirmationsRequired) {
+            revert SmartPayMultisig__CannotExecuteTx();
+        }
+
+        if (transaction.to == address(0)) {
             revert SmartPayMultisig__CannotExecuteTx();
         }
 
@@ -245,7 +267,7 @@ contract SmartPayMultisig {
      * @notice Revoke a confirmation for a transaction.
      * @param _txIndex The index of the transaction to revoke confirmation for.
      */
-    function revokeConfirmation(uint256 _txIndex) external onlyOwner txExists(_txIndex) notExecuted(_txIndex) {
+    function revokeConfirmation(uint256 _txIndex) external onlyOwners txExists(_txIndex) notExecuted(_txIndex) {
         Transaction storage transaction = s_transactions[_txIndex];
 
         if (!s_isConfirmed[_txIndex][msg.sender]) {
