@@ -61,7 +61,7 @@ contract SmartPayMultisig {
     /// @dev The address of the owner who deployed the contract.
     address private immutable i_contractOwner;
     /// @dev The minimum weight of confirmations required to execute a transaction.
-    uint8 private s_numConfirmationsRequired = 66;
+    uint8 private s_weightConfirmationsRequired = 66;
     /// @dev An array containing the addresses of all owners.
     address[] private s_owners;
     /// @dev A mapping from an owner's address to their voting weight.
@@ -202,7 +202,7 @@ contract SmartPayMultisig {
      * @param _numConfirmationsRequired The new minimum weight of confirmations required.
      */
     function setNumConfirmationsRequired(uint8 _numConfirmationsRequired) external onlyContractOwner {
-        s_numConfirmationsRequired = _numConfirmationsRequired;
+        s_weightConfirmationsRequired = _numConfirmationsRequired;
         emit SetNumConfirmationsRequired(_numConfirmationsRequired);
     }
 
@@ -245,7 +245,7 @@ contract SmartPayMultisig {
     function executeTransaction(uint256 _txIndex) external onlyOwners txExists(_txIndex) notExecuted(_txIndex) {
         Transaction storage transaction = s_transactions[_txIndex];
 
-        if (transaction.numConfirmations < s_numConfirmationsRequired) {
+        if (transaction.numConfirmations < s_weightConfirmationsRequired) {
             revert SmartPayMultisig__CannotExecuteTx();
         }
 
@@ -278,6 +278,14 @@ contract SmartPayMultisig {
         s_isConfirmed[_txIndex][msg.sender] = false;
 
         emit RevokeConfirmation(msg.sender, _txIndex);
+    }
+
+    /**
+     * @notice Get the minimum weight of confirmations required to execute a transaction.
+     * @return The minimum weight of confirmations required.
+     */
+    function getWeightConfirmationsRequired() external view onlyContractOwner returns (uint8) {
+        return s_weightConfirmationsRequired;
     }
 
     /**
