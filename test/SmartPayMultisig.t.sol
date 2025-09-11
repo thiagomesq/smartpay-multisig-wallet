@@ -57,18 +57,18 @@ contract SmartPayMultisigTest is Test {
         assertEq(owners[2], _newOwner, "The new owner should be the last in the list");
     }
 
-    function testFuzz_setNumConfirmationsRequired(uint8 _newConfirmations) public {
+    function testFuzz_setWeightConfirmationsRequired(uint8 _newConfirmations) public {
         vm.assume(_newConfirmations > 0 && _newConfirmations <= 100);
 
         vm.startPrank(s_owner1);
         vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotContractOwner.selector);
-        s_smartPayMultisig.setNumConfirmationsRequired(_newConfirmations);
+        s_smartPayMultisig.setWeightConfirmationsRequired(_newConfirmations);
         vm.stopPrank();
 
         vm.startPrank(s_contractOwner);
         vm.expectEmit(true, true, true, true);
-        emit SmartPayMultisig.SetNumConfirmationsRequired(_newConfirmations);
-        s_smartPayMultisig.setNumConfirmationsRequired(_newConfirmations);
+        emit SmartPayMultisig.SetWeightConfirmationsRequired(_newConfirmations);
+        s_smartPayMultisig.setWeightConfirmationsRequired(_newConfirmations);
         vm.stopPrank();
     }
 
@@ -92,14 +92,14 @@ contract SmartPayMultisigTest is Test {
 
         assertEq(s_smartPayMultisig.getTransactionCount(), txIndex + 1, "Transaction count should increment");
 
-        (address to, uint256 value, bytes memory data, bool executed, uint256 numConfirmations) =
+        (address to, uint256 value, bytes memory data, bool executed, uint256 weightConfirmations) =
             s_smartPayMultisig.getTransaction(txIndex);
 
         assertEq(to, _to, "Transaction 'to' address is incorrect");
         assertEq(value, _value, "Transaction 'value' is incorrect");
         assertEq(keccak256(data), keccak256(_data), "Transaction 'data' is incorrect");
         assertFalse(executed, "Transaction should not be executed yet");
-        assertEq(numConfirmations, 0, "Transaction should have 0 confirmations initially");
+        assertEq(weightConfirmations, 0, "Transaction should have 0 confirmations initially");
     }
 
     // Helper function to submit a generic transaction for other tests
@@ -140,8 +140,8 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.confirmTransaction(s_txIndex);
         vm.stopPrank();
 
-        (,,,, uint256 numConfirmations) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertEq(numConfirmations, WEIGHT_2, "Confirmations should be equal to the weight of the confirming owner");
+        (,,,, uint256 weightConfirmations) = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertEq(weightConfirmations, WEIGHT_2, "Confirmations should be equal to the weight of the confirming owner");
     }
 
     function test_confirmTransaction_RevertsIfExecuted() public {
@@ -150,7 +150,7 @@ contract SmartPayMultisigTest is Test {
         vm.deal(address(s_smartPayMultisig), 1 ether);
 
         vm.startPrank(s_contractOwner);
-        s_smartPayMultisig.setNumConfirmationsRequired(WEIGHT_1 + WEIGHT_2);
+        s_smartPayMultisig.setWeightConfirmationsRequired(WEIGHT_1 + WEIGHT_2);
         vm.stopPrank();
 
         vm.startPrank(s_owner1);
@@ -201,8 +201,8 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.confirmTransaction(s_txIndex);
         vm.stopPrank();
 
-        (,,,, uint256 numConfirmationsBefore) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertEq(numConfirmationsBefore, WEIGHT_1, "Confirmations should be WEIGHT_1 before revoking");
+        (,,,, uint256 weightConfirmationsBefore) = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertEq(weightConfirmationsBefore, WEIGHT_1, "Confirmations should be WEIGHT_1 before revoking");
 
         vm.startPrank(s_owner1);
         vm.expectEmit(true, true, false, false);
@@ -210,8 +210,8 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.revokeConfirmation(s_txIndex);
         vm.stopPrank();
 
-        (,,,, uint256 numConfirmationsAfter) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertEq(numConfirmationsAfter, 0, "Confirmations should be 0 after revoking");
+        (,,,, uint256 weightConfirmationsAfter) = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertEq(weightConfirmationsAfter, 0, "Confirmations should be 0 after revoking");
     }
 
     function test_executeTransaction_Reverts() public {
@@ -242,7 +242,7 @@ contract SmartPayMultisigTest is Test {
         vm.deal(address(s_smartPayMultisig), 1 ether);
 
         vm.startPrank(s_contractOwner);
-        s_smartPayMultisig.setNumConfirmationsRequired(WEIGHT_1 + WEIGHT_2);
+        s_smartPayMultisig.setWeightConfirmationsRequired(WEIGHT_1 + WEIGHT_2);
         vm.stopPrank();
 
         vm.startPrank(s_owner1);

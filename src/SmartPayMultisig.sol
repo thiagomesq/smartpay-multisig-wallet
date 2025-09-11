@@ -48,14 +48,14 @@ contract SmartPayMultisig {
      * @param value The amount of ETH to be sent.
      * @param data The calldata for the transaction.
      * @param executed A flag indicating whether the transaction has been executed.
-     * @param numConfirmations The total weight of confirmations received.
+     * @param weightConfirmations The total weight of confirmations received.
      */
     struct Transaction {
         address to;
         uint256 value;
         bytes data;
         bool executed;
-        uint8 numConfirmations;
+        uint8 weightConfirmations;
     }
 
     /// @dev The address of the owner who deployed the contract.
@@ -119,9 +119,9 @@ contract SmartPayMultisig {
     event AddOwner(address caller,address indexed owner, uint8 weight);
     /**
      * @notice Emitted when the minimum weight of confirmations required to execute a transaction is set.
-     * @param numConfirmationsRequired The new minimum weight of confirmations required.
+     * @param weightConfirmationsRequired The new minimum weight of confirmations required.
      */
-    event SetNumConfirmationsRequired(uint8 indexed numConfirmationsRequired);
+    event SetWeightConfirmationsRequired(uint8 indexed weightConfirmationsRequired);
 
     /**
      * @dev Modifier to check if the caller is an owner.
@@ -199,11 +199,11 @@ contract SmartPayMultisig {
 
     /**
      * @notice Sets the minimum weight of confirmations required to execute a transaction.
-     * @param _numConfirmationsRequired The new minimum weight of confirmations required.
+     * @param _weightConfirmationsRequired The new minimum weight of confirmations required.
      */
-    function setNumConfirmationsRequired(uint8 _numConfirmationsRequired) external onlyContractOwner {
-        s_weightConfirmationsRequired = _numConfirmationsRequired;
-        emit SetNumConfirmationsRequired(_numConfirmationsRequired);
+    function setWeightConfirmationsRequired(uint8 _weightConfirmationsRequired) external onlyContractOwner {
+        s_weightConfirmationsRequired = _weightConfirmationsRequired;
+        emit SetWeightConfirmationsRequired(_weightConfirmationsRequired);
     }
 
     /**
@@ -215,7 +215,7 @@ contract SmartPayMultisig {
     function submitTransaction(address _to, uint256 _value, bytes memory _data) external onlyOwners {
         uint256 txIndex = s_transactions.length;
 
-        s_transactions.push(Transaction({to: _to, value: _value, data: _data, executed: false, numConfirmations: 0}));
+        s_transactions.push(Transaction({to: _to, value: _value, data: _data, executed: false, weightConfirmations: 0}));
 
         emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
     }
@@ -232,7 +232,7 @@ contract SmartPayMultisig {
         notConfirmed(_txIndex)
     {
         Transaction storage transaction = s_transactions[_txIndex];
-        transaction.numConfirmations += s_ownerWeights[msg.sender];
+        transaction.weightConfirmations += s_ownerWeights[msg.sender];
         s_isConfirmed[_txIndex][msg.sender] = true;
 
         emit ConfirmTransaction(msg.sender, _txIndex);
@@ -245,7 +245,7 @@ contract SmartPayMultisig {
     function executeTransaction(uint256 _txIndex) external onlyOwners txExists(_txIndex) notExecuted(_txIndex) {
         Transaction storage transaction = s_transactions[_txIndex];
 
-        if (transaction.numConfirmations < s_weightConfirmationsRequired) {
+        if (transaction.weightConfirmations < s_weightConfirmationsRequired) {
             revert SmartPayMultisig__CannotExecuteTx();
         }
 
@@ -274,7 +274,7 @@ contract SmartPayMultisig {
             revert SmartPayMultisig__TxNotConfirmed();
         }
 
-        transaction.numConfirmations -= s_ownerWeights[msg.sender];
+        transaction.weightConfirmations -= s_ownerWeights[msg.sender];
         s_isConfirmed[_txIndex][msg.sender] = false;
 
         emit RevokeConfirmation(msg.sender, _txIndex);
@@ -311,15 +311,15 @@ contract SmartPayMultisig {
      * @return value The amount of ETH to be sent.
      * @return data The calldata for the transaction.
      * @return executed A flag indicating whether the transaction has been executed.
-     * @return numConfirmations The total weight of confirmations received.
+     * @return weightConfirmations The total weight of confirmations received.
      */
     function getTransaction(uint256 _txIndex)
         external
         view
-        returns (address to, uint256 value, bytes memory data, bool executed, uint256 numConfirmations)
+        returns (address to, uint256 value, bytes memory data, bool executed, uint256 weightConfirmations)
     {
         Transaction storage transaction = s_transactions[_txIndex];
 
-        return (transaction.to, transaction.value, transaction.data, transaction.executed, transaction.numConfirmations);
+        return (transaction.to, transaction.value, transaction.data, transaction.executed, transaction.weightConfirmations);
     }
 }
