@@ -297,6 +297,34 @@ contract SmartPayMultisig {
     }
 
     /**
+     * @notice Get the voting weight of an owner.
+     * @param _owner The address of the owner to check.
+     * @return The voting weight of the owner.
+     */
+    function getOwnerWeight(address _owner) external view returns (uint8) {
+        return s_ownerWeights[_owner];
+    }
+    
+    /**
+     * @notice Get the confirmation status of a transaction for the caller.
+     * @param _txIndex The index of the transaction to check.
+     * @return The confirmation status of the transaction for the caller.
+     */
+    function getConfirmed(uint256 _txIndex) external view returns (bool) {
+        return s_isConfirmed[_txIndex][msg.sender];
+    }
+
+    /**
+     * @notice Get the confirmation status of a transaction for a specific owner.
+     * @param _txIndex The index of the transaction to check.
+     * @param _owner The address of the owner to check.
+     * @return The confirmation status of the transaction for a specific owner.
+     */
+    function getConfirmed(uint256 _txIndex, address _owner) external view returns (bool) {
+        return s_isConfirmed[_txIndex][_owner];
+    } 
+
+    /**
      * @notice Get the number of transactions submitted to the contract.
      * @return The number of transactions submitted to the contract.
      */
