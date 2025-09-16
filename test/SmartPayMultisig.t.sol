@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 
 import {Test, console} from "forge-std/Test.sol";
 import {SmartPayMultisig} from "../src/SmartPayMultisig.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract SmartPayMultisigTest is Test {
     SmartPayMultisig private s_smartPayMultisig;
@@ -44,7 +45,7 @@ contract SmartPayMultisigTest is Test {
         vm.assume(_newOwner != address(0));
 
         vm.startPrank(s_owner1);
-        vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotContractOwner.selector);
+        vm.expectRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         s_smartPayMultisig.addOwnerAndSetWeight(_newOwner, _weight);
         vm.stopPrank();
 
@@ -61,7 +62,7 @@ contract SmartPayMultisigTest is Test {
         vm.assume(_newConfirmations > 0 && _newConfirmations <= 100);
 
         vm.startPrank(s_owner1);
-        vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotContractOwner.selector);
+        vm.expectRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         s_smartPayMultisig.setWeightConfirmationsRequired(_newConfirmations);
         vm.stopPrank();
 
@@ -78,7 +79,7 @@ contract SmartPayMultisigTest is Test {
 
         // Revert if a non-owner tries to submit
         vm.startPrank(nonOwner);
-        vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotOwner.selector);
+        vm.expectRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         s_smartPayMultisig.submitTransaction(_to, _value, _data);
         vm.stopPrank();
 
@@ -92,14 +93,13 @@ contract SmartPayMultisigTest is Test {
 
         assertEq(s_smartPayMultisig.getTransactionCount(), txIndex + 1, "Transaction count should increment");
 
-        (address to, uint256 value, bytes memory data, bool executed, uint256 weightConfirmations) =
-            s_smartPayMultisig.getTransaction(txIndex);
+        SmartPayMultisig.Transaction memory transaction = s_smartPayMultisig.getTransaction(txIndex);
 
-        assertEq(to, _to, "Transaction 'to' address is incorrect");
-        assertEq(value, _value, "Transaction 'value' is incorrect");
-        assertEq(keccak256(data), keccak256(_data), "Transaction 'data' is incorrect");
-        assertFalse(executed, "Transaction should not be executed yet");
-        assertEq(weightConfirmations, 0, "Transaction should have 0 confirmations initially");
+        assertEq(transaction.to, _to, "Transaction 'to' address is incorrect");
+        assertEq(transaction.value, _value, "Transaction 'value' is incorrect");
+        assertEq(keccak256(transaction.data), keccak256(_data), "Transaction 'data' is incorrect");
+        assertFalse(transaction.executed, "Transaction should not be executed yet");
+        assertEq(transaction.weightConfirmations, 0, "Transaction should have 0 confirmations initially");
     }
 
     // Helper function to submit a generic transaction for other tests
@@ -115,7 +115,7 @@ contract SmartPayMultisigTest is Test {
 
         // Revert if non-owner tries to confirm
         vm.startPrank(makeAddr("nonOwner"));
-        vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotOwner.selector);
+        vm.expectRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         s_smartPayMultisig.confirmTransaction(s_txIndex);
         vm.stopPrank();
 
@@ -140,8 +140,12 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.confirmTransaction(s_txIndex);
         vm.stopPrank();
 
-        (,,,, uint256 weightConfirmations) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertEq(weightConfirmations, WEIGHT_2, "Confirmations should be equal to the weight of the confirming owner");
+        SmartPayMultisig.Transaction memory transaction = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertEq(
+            transaction.weightConfirmations,
+            WEIGHT_2,
+            "Confirmations should be equal to the weight of the confirming owner"
+        );
     }
 
     function test_confirmTransaction_RevertsIfExecuted() public {
@@ -179,7 +183,7 @@ contract SmartPayMultisigTest is Test {
 
         // Revert if non-owner tries to revoke
         vm.startPrank(makeAddr("nonOwner"));
-        vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotOwner.selector);
+        vm.expectRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         s_smartPayMultisig.revokeConfirmation(s_txIndex);
         vm.stopPrank();
 
@@ -201,8 +205,8 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.confirmTransaction(s_txIndex);
         vm.stopPrank();
 
-        (,,,, uint256 weightConfirmationsBefore) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertEq(weightConfirmationsBefore, WEIGHT_1, "Confirmations should be WEIGHT_1 before revoking");
+        SmartPayMultisig.Transaction memory transaction = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertEq(transaction.weightConfirmations, WEIGHT_1, "Confirmations should be WEIGHT_1 before revoking");
 
         vm.startPrank(s_owner1);
         vm.expectEmit(true, true, false, false);
@@ -210,8 +214,8 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.revokeConfirmation(s_txIndex);
         vm.stopPrank();
 
-        (,,,, uint256 weightConfirmationsAfter) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertEq(weightConfirmationsAfter, 0, "Confirmations should be 0 after revoking");
+        transaction = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertEq(transaction.weightConfirmations, 0, "Confirmations should be 0 after revoking");
     }
 
     function test_executeTransaction_Reverts() public {
@@ -219,7 +223,7 @@ contract SmartPayMultisigTest is Test {
 
         // Revert if non-owner tries to execute
         vm.startPrank(makeAddr("nonOwner"));
-        vm.expectRevert(SmartPayMultisig.SmartPayMultisig__NotOwner.selector);
+        vm.expectRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         s_smartPayMultisig.executeTransaction(s_txIndex);
         vm.stopPrank();
 
@@ -257,8 +261,8 @@ contract SmartPayMultisigTest is Test {
         s_smartPayMultisig.executeTransaction(s_txIndex);
         vm.stopPrank();
 
-        (,,, bool executed,) = s_smartPayMultisig.getTransaction(s_txIndex);
-        assertTrue(executed, "Transaction should be marked as executed");
+        SmartPayMultisig.Transaction memory transaction = s_smartPayMultisig.getTransaction(s_txIndex);
+        assertTrue(transaction.executed, "Transaction should be marked as executed");
         assertEq(recipient.balance, startingBalance + 1 ether, "Recipient should have received 1 ether");
 
         // Revert if already executed
@@ -285,6 +289,8 @@ contract SmartPayMultisigTest is Test {
         vm.stopPrank();
 
         uint256 finalBalance = address(s_smartPayMultisig).balance;
-        assertEq(finalBalance, initialBalance + amount, "Contract balance should have increased by the deposited amount");
+        assertEq(
+            finalBalance, initialBalance + amount, "Contract balance should have increased by the deposited amount"
+        );
     }
 }
